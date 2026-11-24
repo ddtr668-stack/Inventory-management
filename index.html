@@ -618,6 +618,42 @@ layout: null
         window.matchMedia('(max-width: 767px), (pointer: coarse) and (max-device-width: 1024px)').matches;
     }
 
+    async function showDeploymentVersion(label) {
+      const cacheKey = 'sg_pages_version';
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey));
+        if (cached?.revision === deployedRevision && /^ver[0-9]+[.][0-9]$/.test(cached.version)) {
+          label.textContent = cached.version;
+          return;
+        }
+      } catch {}
+
+      const runs = 'https://api.github.com/repos/ddtr668-stack/Inventory-management/actions/workflows/428742666/runs';
+      // Count successful production builds after the last deployment before ver1.0.
+      const firstVersionStart = '2026-11-24T13:26:09Z';
+      const fetchRuns = async params => {
+        const query = new URLSearchParams({branch: 'main', per_page: '1', ...params});
+        const response = await fetch(runs + '?' + query, {signal: AbortSignal.timeout(8000)});
+        if (!response.ok) throw new Error('GitHub version lookup failed');
+        return response.json();
+      };
+
+      try {
+        const {workflow_runs: [deployment]} = await fetchRuns({head_sha: deployedRevision});
+        if (!deployment || deployment.created_at < firstVersionStart) throw new Error('Deployment not found');
+        const previousSecond = new Date(Date.parse(deployment.created_at) - 1000).toISOString().replace('.000Z', 'Z');
+        const {total_count: previousBuilds} = await fetchRuns({
+          status: 'success', created: firstVersionStart + '..' + previousSecond
+        });
+        if (!Number.isSafeInteger(previousBuilds) || previousBuilds < 0) throw new Error('Invalid deployment count');
+        const version = 'ver' + ((10 + previousBuilds) / 10).toFixed(1);
+        label.textContent = version;
+        try { localStorage.setItem(cacheKey, JSON.stringify({revision: deployedRevision, version})); } catch {}
+      } catch {
+        label.textContent = '버전 확인 불가';
+      }
+    }
+
     function attachSessionControls() {
       const banners = [...document.body.querySelectorAll('div, aside, header, p, section')];
       const banner = banners.reverse().find(element => {
@@ -639,8 +675,10 @@ layout: null
       controls.append(button);
       if (/^[a-f0-9]{40}$/i.test(deployedRevision)) {
         const version = document.createElement('code');
-        version.textContent = 'v.' + deployedRevision.slice(0, 7);
-        version.title = '배포 버전 ' + deployedRevision;
+        version.textContent = '버전 확인 중';
+        version.title = '배포 커밋 ' + deployedRevision;
+        version.setAttribute('aria-live', 'polite');
+        void showDeploymentVersion(version);
         version.style.cssText = 'font-size:11px;color:inherit';
         controls.append(version);
       }
