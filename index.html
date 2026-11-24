@@ -236,7 +236,230 @@
     }
     }
 
-    async function openApp(rawKey) {
+    function attachInventoryComparison(isAdmin) {
+      const board = document.getElementById('dashboardBoardsContainer');
+      if (!board || typeof state === 'undefined') return;
+      const selected = new Map();
+      const warehouses = [['배방', 'asan'], ['순천향', 'sch'], ['익산', 'iksan']];
+      const specFields = [
+        ['전원 사양', 'power'], ['전원선 굵기', 'powerCable'],
+        ['차단기 용량', 'breaker'], ['통신선 굵기', 'communicationCable'],
+        ['배관 사양 (액관·가스관)', 'pipe']
+      ];
+      const safe = value => escapeHtml(value ?? '');
+      const inventoryItem = code => Object.hasOwn(modelMap, code) ? modelMap[code] : undefined;
+
+      document.body.classList.toggle('sg-staff', !isAdmin);
+      const style = document.createElement('style');
+      style.textContent = `
+        #sg-compare-actions {display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0}
+        #sg-compare-actions button,#sg-model-actions button {padding:7px 12px;border-radius:7px;background:#1453a1;color:white;font-weight:650}
+        #sg-compare-actions button:disabled {opacity:.45;cursor:default}
+        .sg-model-check {width:17px;height:17px;vertical-align:middle;margin:0 6px 0 0;accent-color:#1974d2}
+        .sg-mobile-res {display:none}
+        .sg-model-link {text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+        #sg-model-dialog {width:min(1180px,calc(100% - 24px));max-height:90vh;margin:auto;padding:16px;border:1px solid #4b709c;border-radius:12px;background:#0c1c30;color:#f5f8ff}
+        #sg-model-dialog::backdrop {background:#050a14b8}
+        #sg-model-dialog h2 {font-size:20px;font-weight:750;margin:0 0 10px}
+        #sg-model-actions {display:flex;gap:8px;margin:0 0 10px}
+        #sg-model-content {display:grid;grid-auto-flow:column;grid-auto-columns:clamp(420px,48%,550px);gap:12px;overflow:auto;padding-bottom:10px}
+        #sg-model-content section {border:1px solid #426187;border-radius:8px;padding:10px;min-width:0}
+        #sg-model-content h3 {font-weight:750;margin-bottom:8px;color:#b5daff}
+        #sg-model-content table {width:100%;border-collapse:collapse;font-size:12px}
+        #sg-model-content :is(th,td) {border:1px solid #435671;padding:5px;text-align:center}
+        #sg-model-content th {background:#183154}
+        #sg-model-content .sg-model-code {text-align:left;overflow-wrap:anywhere}
+        #sg-model-content .sg-res {color:#ffd080}
+        #sg-model-content dl div {display:grid;grid-template-columns:1fr 1fr;gap:8px;border-bottom:1px solid #435671;padding:6px}
+        #sg-model-content dd {text-align:right;overflow-wrap:anywhere}
+        #sg-model-dialog form {display:flex;justify-content:flex-end;margin-top:10px}
+        #sg-model-dialog form button {padding:8px 24px;border-radius:7px;background:#1453a1;color:white}
+        @media screen and (min-width:768px) {
+          body.sg-staff.ec-layout {padding-left:0}
+          body.sg-staff #ecSidebar {position:static;width:auto;padding:8px 16px}
+          body.sg-staff #ecSidebar > :not(.ec-sb-logo) {display:none!important}
+          body.sg-staff .ec-sb-logo {margin:0}
+          body.sg-staff :is(#ecPageHead,#ecKpi,#ecOldKpi,#ecOldWhBar,#ecBoardGroup,[id^="navTab-"],#sg-pages-ecount-open,#btnBoardEdit,.ec-seg,[onclick="resetBoardEdits()"],[onclick="exportDashboardExcel()"],label:has(#chkIncludeNewOnBoards)) {display:none!important}
+        }
+        @media screen and (max-width:767px) {
+          body:has(#sg-compare-actions) :is(#ecKpi,#ecOldKpi,#ecOldWhBar) {display:none!important}
+          #ecBoardCards {display:flex;flex-wrap:nowrap;overflow-x:auto}
+          #ecBoardCards .ec-bc {flex:0 0 auto}
+          #ecBoardCards :is(.ec-bc-q,.ec-bar) {display:none}
+          #ecBoardBar {align-items:flex-start}
+          #ecBoardBarSlots {flex:1 0 100%;justify-content:flex-start}
+          #ecBoardBarSlots .relative {flex:1 0 100%}
+          #dashboardBoardsContainer {min-width:0;max-width:100%;overflow:hidden}
+          #dashboardBoardsContainer .sg-stock-scroll {overflow-x:auto;max-width:100%}
+          #dashboardBoardsContainer table.matrix-table {width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
+          #dashboardBoardsContainer .sg-mobile-res {display:table-cell;color:#ffc96f;text-align:center;background:#2a241c;padding:3px 5px}
+          #dashboardBoardsContainer .sg-total, #dashboardBoardsContainer .print-board-sheet > div:not(.print-sign-box) > div > span.sg-summary {display:none!important}
+          #dashboardBoardsContainer .sg-fixed {position:sticky;left:var(--sg-left);width:var(--sg-width);min-width:var(--sg-width);max-width:var(--sg-width);white-space:normal;overflow-wrap:anywhere;background:#14243a!important;color:#f1f5f9!important;z-index:2}
+          #sg-model-content {grid-auto-columns:100%;scroll-snap-type:x mandatory}
+          #sg-model-content section {scroll-snap-align:start;overflow:auto}
+          #sg-model-content table {min-width:290px}
+        }
+        @media print {#sg-compare-actions,.sg-model-check,#sg-model-dialog {display:none!important}}
+      `;
+      document.head.append(style);
+
+      const actions = document.createElement('div');
+      actions.id = 'sg-compare-actions';
+      actions.className = 'no-print';
+      actions.innerHTML = '<span role="status">0개 선택</span><button type="button" disabled>재고 보기</button><button type="button" disabled>설치 사양 보기</button>';
+      board.before(actions);
+      const [count, stockButton, specButton] = actions.children;
+
+      const dialog = document.createElement('dialog');
+      dialog.id = 'sg-model-dialog';
+      dialog.setAttribute('aria-labelledby', 'sg-model-title');
+      dialog.innerHTML = '<h2 id="sg-model-title"></h2><div id="sg-model-actions"><button type="button">재고 보기</button><button type="button">설치 사양 보기</button></div><div id="sg-model-content" tabindex="0" aria-label="선택 모델 비교"></div><form method="dialog"><button>닫기</button></form>';
+      document.body.append(dialog);
+      const content = dialog.querySelector('#sg-model-content');
+      let displayed = [];
+
+      function components(entry) {
+        const current = inventoryItem(entry.code);
+        if (entry.board !== 'pac_cac') {
+          return [{ label: current?.unit_type || '품목', code: entry.code }];
+        }
+        const row = BOARDS_MATRIX[entry.board]?.[entry.row];
+        const codeAt = key => {
+          const code = row?.[key]?.m;
+          return code && !code.startsWith('*') ? code : '';
+        };
+        const indoors = [codeAt('c1'), codeAt('c3')].filter(Boolean);
+        const indoor = indoors.includes(entry.code) ? entry.code : (indoors.length === 1 ? indoors[0] : '');
+        return [
+          {label:'실내기', code:indoor},
+          {label:'실외기', code:codeAt('c2')},
+          {label:'배관', code:codeAt('c4')}
+        ];
+      }
+
+      function stockTable(parts) {
+        const groups = warehouses.map(([label]) => `<th scope="colgroup" colspan="2">${label}</th>`).join('');
+        const columns = warehouses.map(() => '<th scope="col">현재고</th><th scope="col">예약</th>').join('');
+        const rows = parts.map(({label, code}) => {
+          const item = inventoryItem(code);
+          const quantity = key => Number.isFinite(item?.[key]) ? item[key].toLocaleString('ko-KR') : '—';
+          const cells = warehouses.map(([,key]) =>
+            `<td>${quantity(key + '_qty')}</td><td class="sg-res">${quantity(key + '_res')}</td>`).join('');
+          return `<tr><th scope="row">${safe(label)}</th><td class="sg-model-code">${safe(code || '미등록')}</td>${cells}</tr>`;
+        }).join('');
+        return `<table><thead><tr><th rowspan="2" scope="col">구성품</th><th rowspan="2" scope="col">모델명</th>${groups}</tr><tr>${columns}</tr></thead><tbody>${rows}</tbody></table>`;
+      }
+
+      function specs(entry, parts) {
+        const outdoor = parts.find(part => part.label === '실외기')?.code;
+        const model = inventoryItem(outdoor || entry.code);
+        const data = model?.installation_specs || {};
+        return `<dl>${specFields.map(([label,key]) =>
+          `<div><dt>${label}</dt><dd>${safe(data[key] || '미등록')}</dd></div>`).join('')}</dl>`;
+      }
+
+      function show(entries, mode) {
+        if (!entries.length) return;
+        displayed = entries;
+        const stock = mode === 'stock';
+        dialog.querySelector('h2').textContent = stock ? '선택 모델 재고' : '선택 모델 설치 사양';
+        [...dialog.querySelector('#sg-model-actions').children].forEach((button, index) =>
+          button.setAttribute('aria-pressed', String(stock === (index === 0))));
+        content.innerHTML = entries.map(entry => {
+          const parts = components(entry);
+          return `<section><h3>${safe(entry.code)}</h3>${stock ? stockTable(parts) : specs(entry, parts)}</section>`;
+        }).join('');
+        content.scrollLeft = 0;
+        if (!dialog.open) dialog.showModal();
+      }
+
+      stockButton.onclick = () => show([...selected.values()], 'stock');
+      specButton.onclick = () => show([...selected.values()], 'spec');
+      dialog.querySelector('#sg-model-actions').children[0].onclick = () => show(displayed, 'stock');
+      dialog.querySelector('#sg-model-actions').children[1].onclick = () => show(displayed, 'spec');
+
+      function enhanceBoard() {
+        board.querySelectorAll('table.matrix-table:not([data-sg-enhanced])').forEach(table => {
+          table.dataset.sgEnhanced = 'true';
+          table.parentElement.classList.add('sg-stock-scroll');
+          const header = [...(table.tHead?.rows[0]?.cells || [])];
+          const totals = header.map(cell => cell.textContent.trim() === '합계');
+          const schColumns = header.map(cell => cell.textContent.trim() === '순천향');
+          header.forEach((cell, index) => cell.classList.toggle('sg-total', totals[index]));
+          const frozen = ['품목','평형','구분'].every((label,index) => header[index]?.textContent.trim() === label);
+          const pin = (cell, index) => {
+            if (!frozen || index > 2) return;
+            cell.classList.add('sg-fixed');
+            cell.style.setProperty('--sg-left', [0, 70, 106][index] + 'px');
+            cell.style.setProperty('--sg-width', [70, 36, 56][index] + 'px');
+          };
+          const insertReservation = (cell, value) => {
+            const extra = document.createElement(cell.tagName.toLowerCase());
+            extra.className = 'sg-mobile-res';
+            extra.textContent = value;
+            extra.title = '순천향 예약';
+            cell.after(extra);
+          };
+          header.forEach((cell, index) => {
+            pin(cell, index);
+            if (schColumns[index]) insertReservation(cell, '예약');
+          });
+          table.closest('.print-board-sheet')?.querySelectorAll(':scope > div > div > span:has(strong)').forEach(span => span.classList.add('sg-summary'));
+          for (const body of table.tBodies) for (const row of body.rows) {
+            const rowId = row.querySelector('[data-rid]')?.dataset.rid || '';
+            const [boardId, rowIndex] = rowId.split(':');
+            let column = 0;
+            let currentModel = null;
+            for (const cell of [...row.cells]) {
+              const start = column;
+              column += cell.colSpan;
+              if (cell.colSpan === 1) {
+                pin(cell, start);
+                cell.classList.toggle('sg-total', totals[start] === true);
+              }
+              const model = cell.querySelector('span.font-mono');
+              const ownModel = cell.classList.contains('font-mono') && cell.matches('[onclick^="openEditModal"]');
+              const code = model?.textContent.trim() || (ownModel ? cell.firstChild?.textContent.trim() : '');
+              if (header[start]?.className.includes('bg-slate-200/70') || code) currentModel = code ? inventoryItem(code) : null;
+              if (cell.colSpan === 1 && schColumns[start]) {
+                insertReservation(cell, Number.isFinite(currentModel?.sch_res) ? currentModel.sch_res.toLocaleString('ko-KR') : '—');
+              }
+              if (!code) continue;
+              const entry = {code, board:boardId, row:rowIndex};
+              const key = JSON.stringify([rowId,code]);
+              const check = document.createElement('input');
+              check.type = 'checkbox';
+              check.className = 'sg-model-check';
+              check.checked = selected.has(key);
+              check.dataset.sgKey = key;
+              check.setAttribute('aria-label', code + ' 선택');
+              check.onclick = event => event.stopPropagation();
+              check.onchange = () => {
+                if (check.checked) selected.set(key, entry); else selected.delete(key);
+                count.textContent = selected.size + '개 선택';
+                stockButton.disabled = specButton.disabled = !selected.size;
+                board.querySelectorAll('.sg-model-check').forEach(input => {
+                  if (input.dataset.sgKey === key) input.checked = check.checked;
+                });
+              };
+              const link = document.createElement('button');
+              link.type = 'button';
+              link.className = 'sg-model-link';
+              link.textContent = code;
+              link.onclick = event => { event.stopPropagation(); show([entry], 'stock'); };
+              cell.removeAttribute('title');
+              if (model) model.replaceWith(check, link);
+              else cell.firstChild.replaceWith(check, link);
+            }
+          }
+        });
+      }
+
+      new MutationObserver(enhanceBoard).observe(board, {childList:true, subtree:true});
+      enhanceBoard();
+    }
+
+    async function openApp(rawKey, accountName) {
       const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
       const r = await fetch('data/app.enc?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) throw new Error('재고 자료(data/app.enc)를 찾지 못했습니다.');
@@ -244,14 +467,23 @@
       const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
       const ds = new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'));
       const html = await new Response(ds).text();
-      document.open(); document.write(html); document.close();
-      try { attachEcountPanel(); } catch (error) { console.warn('이카운트 메뉴를 열 수 없습니다.', error); }
+      document.open();
+      document.write(html);
+      document.addEventListener('DOMContentLoaded', () => {
+        try {
+          attachInventoryComparison(accountName?.trim().toLowerCase() === 'admin');
+        } catch (error) {
+          console.warn('재고 비교를 준비할 수 없습니다.', error);
+        }
+        try { attachEcountPanel(); } catch (error) { console.warn('이카운트 메뉴를 열 수 없습니다.', error); }
+      }, {once: true});
+      document.close();
     }
 
     async function resume() {
       let k = null; try { k = sessionStorage.getItem('sg_pages_key'); } catch (e) {}
       if (!k) return false;
-      try { setBusy(true, '여는 중…'); await openApp(b64(k)); return true; }
+      try { setBusy(true, '여는 중…'); await openApp(b64(k), sessionStorage.getItem('sg_pages_user')); return true; }
       catch (e) { try { sessionStorage.removeItem('sg_pages_key'); } catch (x) {} setBusy(false); return false; }
     }
 
@@ -268,7 +500,7 @@
         if (!u) { setErr('아이디 또는 비밀번호가 맞지 않습니다.'); setBusy(false); $('password').select(); return; }
         try { sessionStorage.setItem('sg_pages_key', toB64(u.raw)); sessionStorage.setItem('sg_pages_user', u.name); } catch (x) {}
         setBusy(true, '여는 중…');
-        await openApp(u.raw);
+        await openApp(u.raw, u.name);
       } catch (err) {
         setErr(err.message || String(err)); setBusy(false);
       }
