@@ -360,31 +360,38 @@ layout: null
           body.sg-staff #ecSidebar {position:static;width:auto;padding:8px 16px}
           body.sg-staff #ecSidebar > :not(.ec-sb-logo) {display:none!important}
           body.sg-staff .ec-sb-logo {margin:0}
-          body.sg-staff :is(#ecPageHead,#ecKpi,#ecOldKpi,#ecOldWhBar,#ecBoardGroup,[id^="navTab-"],#sg-pages-ecount-open,#btnBoardEdit,.ec-seg,[onclick="resetBoardEdits()"],[onclick="exportDashboardExcel()"],label:has(#chkIncludeNewOnBoards)) {display:none!important}
+          body.sg-staff :is(#ecPageHead,#ecKpi,#ecOldKpi,#ecOldWhBar,[id^="navTab-"],#sg-pages-ecount-open,#btnBoardEdit,.ec-seg,[onclick="resetBoardEdits()"],[onclick="exportDashboardExcel()"],label:has(#chkIncludeNewOnBoards)) {display:none!important}
+          body.sg-staff:not(.sg-mobile-inventory) #ecBoardGroup {display:none!important}
         }
         @media screen and (max-width:767px) {
           body:has(#sg-compare-actions) :is(#ecKpi,#ecOldKpi,#ecOldWhBar) {display:none!important}
-          #ecBoardCards {display:flex;flex-wrap:nowrap;overflow-x:auto}
-          #ecBoardCards .ec-bc {flex:0 0 auto}
-          #ecBoardCards :is(.ec-bc-q,.ec-bar) {display:none}
-          #ecBoardBar {align-items:flex-start}
-          #ecBoardBarSlots {flex:1 0 100%;justify-content:flex-start}
-          #ecBoardBarSlots .relative {flex:1 0 100%}
           #dashboardBoardsContainer {min-width:0;max-width:100%;overflow:hidden}
           #dashboardBoardsContainer .sg-stock-scroll {overflow-x:auto;max-width:100%}
           #dashboardBoardsContainer table.matrix-table {width:max-content;min-width:100%;border-collapse:separate;border-spacing:0}
-          #dashboardBoardsContainer .sg-mobile-res {display:table-cell;color:#ffc96f;text-align:center;background:#2a241c;padding:3px 5px}
-          #dashboardBoardsContainer .sg-total, #dashboardBoardsContainer .print-board-sheet > div:not(.print-sign-box) > div > span.sg-summary {display:none!important}
-          #dashboardBoardsContainer .sg-fixed {position:sticky;left:var(--sg-left);width:var(--sg-width);min-width:var(--sg-width);max-width:var(--sg-width);white-space:normal;overflow-wrap:anywhere;background:#14243a!important;color:#f1f5f9!important;z-index:2}
           #sg-model-content {grid-auto-columns:100%;scroll-snap-type:x mandatory}
           #sg-model-content section {scroll-snap-align:start;overflow:auto}
           #sg-model-content table {min-width:290px}
         }
         @media screen {
+          .sg-mobile-inventory #ecBoardGroup {margin-block:0;padding-block:0}
+          .sg-mobile-inventory #ecBoardBar {align-items:flex-start;gap:4px;margin-block:0;padding-block:4px}
+          .sg-mobile-inventory #ecBoardBarSlots {flex:1 0 100%;justify-content:flex-start;gap:4px}
+          .sg-mobile-inventory #ecBoardBarSlots .relative {flex:1 0 100%;min-width:0}
+          .sg-mobile-inventory #ecBoardCards {display:grid!important;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px;width:100%;min-width:0;max-width:100%;margin-block:0;padding-block:2px;overflow:visible}
+          .sg-mobile-inventory #ecBoardCards .ec-bc {grid-column:span 3;min-width:0;width:auto;max-width:100%;min-height:28px;margin:0;padding:3px 2px;justify-content:center;text-align:center;font-size:11px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
+          .sg-mobile-inventory #ecBoardCards .ec-bc:nth-child(n+5) {grid-column:span 4}
+          .sg-mobile-inventory #ecBoardCards .ec-bc > * {min-width:0;white-space:normal;overflow-wrap:anywhere}
+          .sg-mobile-inventory #ecBoardCards :is(.ec-bc-q,.ec-bar) {display:none}
+          .sg-mobile-inventory #sg-compare-actions {gap:4px;margin:0;padding:3px 0;font-size:11px;line-height:1.2}
+          .sg-mobile-inventory #sg-compare-actions button {min-height:20px;padding:2px 6px;font-size:11px;line-height:1.2;white-space:nowrap}
           .sg-mobile-inventory #dashboardBoardsContainer, .sg-mobile-inventory .print-board-sheet {min-width:0;max-width:100%}
-          .sg-mobile-inventory .sg-stock-scroll {overflow-x:auto;max-width:100%}
+          .sg-mobile-inventory .sg-stock-scroll {overflow-x:hidden;min-width:0;max-width:100%}
+          .sg-mobile-inventory .sg-stock-scroll.sg-table-expanded {overflow-x:auto}
           .sg-mobile-inventory #dashboardBoardsContainer table.matrix-table {width:max-content;min-width:0}
-          .sg-mobile-inventory #dashboardBoardsContainer .sg-stock-scroll:not(.sg-table-expanded) .sg-fixed {position:static}
+          .sg-mobile-inventory #dashboardBoardsContainer .sg-mobile-res {display:table-cell;color:#ffc96f;text-align:center;background:#2a241c;padding:3px 5px}
+          .sg-mobile-inventory #dashboardBoardsContainer :is(.sg-total,.print-board-sheet > div:not(.print-sign-box) > div > span.sg-summary) {display:none!important}
+          .sg-mobile-inventory #dashboardBoardsContainer .sg-fixed {width:var(--sg-width);min-width:var(--sg-width);max-width:var(--sg-width);white-space:normal;overflow-wrap:anywhere;background:#14243a!important;color:#f1f5f9!important}
+          .sg-mobile-inventory #dashboardBoardsContainer .sg-table-expanded .sg-fixed {position:sticky;left:var(--sg-left);z-index:2}
         }
         @media print {
           #sg-compare-actions,.sg-model-check,#sg-model-dialog {display:none!important}
@@ -416,6 +423,7 @@ layout: null
           if (expanded) continue;
           const width = Math.min(boardWidth, frame.clientWidth);
           const naturalWidth = table.getBoundingClientRect().width;
+          // Leave room for subpixel rounding at the right edge of the fitted table.
           if (width > 0 && naturalWidth > width) table.style.zoom = String((width - 1) / naturalWidth);
           frame.scrollLeft = 0;
         }
