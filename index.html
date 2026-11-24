@@ -239,7 +239,7 @@
     }
     }
 
-    function attachInventoryComparison(isAdmin) {
+    function attachInventoryComparison(isAdmin, mobile) {
       const board = document.getElementById('dashboardBoardsContainer');
       if (!board || typeof state === 'undefined') return;
       const selected = new Map();
@@ -253,6 +253,7 @@
       const inventoryItem = code => Object.hasOwn(modelMap, code) ? modelMap[code] : undefined;
 
       document.body.classList.toggle('sg-staff', !isAdmin);
+      document.body.classList.toggle('sg-mobile-inventory', mobile);
       const style = document.createElement('style');
       style.textContent = `
         #sg-compare-actions {display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0}
@@ -302,7 +303,16 @@
           #sg-model-content section {scroll-snap-align:start;overflow:auto}
           #sg-model-content table {min-width:290px}
         }
-        @media print {#sg-compare-actions,.sg-model-check,#sg-model-dialog {display:none!important}}
+        @media screen {
+          .sg-mobile-inventory #dashboardBoardsContainer, .sg-mobile-inventory .print-board-sheet {min-width:0;max-width:100%}
+          .sg-mobile-inventory .sg-stock-scroll {overflow-x:auto;max-width:100%}
+          .sg-mobile-inventory #dashboardBoardsContainer table.matrix-table {width:max-content;min-width:0}
+          .sg-mobile-inventory #dashboardBoardsContainer .sg-stock-scroll:not(.sg-table-expanded) .sg-fixed {position:static}
+        }
+        @media print {
+          #sg-compare-actions,.sg-model-check,#sg-model-dialog {display:none!important}
+          #dashboardBoardsContainer table.matrix-table {zoom:1!important}
+        }
       `;
       document.head.append(style);
 
@@ -311,7 +321,46 @@
       actions.className = 'no-print';
       actions.innerHTML = '<span role="status">0개 선택</span><button type="button" disabled>재고 보기</button><button type="button" disabled>설치 사양 보기</button>';
       board.before(actions);
+      const zoomButton = document.createElement('button');
+      zoomButton.type = 'button';
+      zoomButton.textContent = '표 확대';
+      zoomButton.setAttribute('aria-pressed', 'false');
       const [count, stockButton, specButton] = actions.children;
+      let expanded = false;
+
+      function fitBoardTables() {
+        if (!mobile) return;
+        const boardWidth = board.clientWidth;
+        if (!boardWidth) return;
+        for (const table of board.querySelectorAll('table.matrix-table')) {
+          const frame = table.parentElement;
+          frame.classList.toggle('sg-table-expanded', expanded);
+          table.style.zoom = '1';
+          if (expanded) continue;
+          const width = Math.min(boardWidth, frame.clientWidth);
+          const naturalWidth = table.getBoundingClientRect().width;
+          if (width > 0 && naturalWidth > width) table.style.zoom = String((width - 1) / naturalWidth);
+          frame.scrollLeft = 0;
+        }
+      }
+
+      if (mobile) {
+        actions.append(zoomButton);
+        zoomButton.addEventListener('click', () => {
+          expanded = !expanded;
+          zoomButton.textContent = expanded ? '한 화면 맞춤' : '표 확대';
+          zoomButton.setAttribute('aria-pressed', String(expanded));
+          fitBoardTables();
+        });
+        let lastWidth = 0;
+        new ResizeObserver(([entry]) => {
+          const width = entry.contentRect.width;
+          if (width === lastWidth) return;
+          lastWidth = width;
+          fitBoardTables();
+        }).observe(board);
+        document.fonts?.ready.then(fitBoardTables);
+      }
 
       const dialog = document.createElement('dialog');
       dialog.id = 'sg-model-dialog';
@@ -382,7 +431,8 @@
       dialog.querySelector('#sg-model-actions').children[1].onclick = () => show(displayed, 'spec');
 
       function enhanceBoard() {
-        board.querySelectorAll('table.matrix-table:not([data-sg-enhanced])').forEach(table => {
+        const tables = board.querySelectorAll('table.matrix-table:not([data-sg-enhanced])');
+        tables.forEach(table => {
           table.dataset.sgEnhanced = 'true';
           table.parentElement.classList.add('sg-stock-scroll');
           const header = [...(table.tHead?.rows[0]?.cells || [])];
@@ -456,6 +506,7 @@
             }
           }
         });
+        if (tables.length) fitBoardTables();
       }
 
       new MutationObserver(enhanceBoard).observe(board, {childList:true, subtree:true});
@@ -470,7 +521,8 @@
     }
 
     async function openApp(rawKey, accountName, readOnly) {
-      const adminMode = !readOnly && !isMobileInventory() && accountName?.trim().toLowerCase() === 'admin';
+      const mobile = isMobileInventory();
+      const adminMode = !readOnly && !mobile && accountName?.trim().toLowerCase() === 'admin';
       const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
       const r = await fetch('data/app.enc?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) throw new Error('재고 자료(data/app.enc)를 찾지 못했습니다.');
@@ -482,7 +534,13 @@
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
         try {
-          attachInventoryComparison(adminMode);
+          if (mobile) {
+            const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
+            viewport.name = 'viewport';
+            viewport.content = 'width=device-width, initial-scale=1';
+            if (!viewport.isConnected) document.head.append(viewport);
+          }
+          attachInventoryComparison(adminMode, mobile);
         } catch (error) {
           console.warn('재고 비교를 준비할 수 없습니다.', error);
         }
