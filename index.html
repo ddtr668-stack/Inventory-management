@@ -462,8 +462,15 @@
       enhanceBoard();
     }
 
+    function isMobileInventory() {
+      return navigator.userAgentData?.mobile === true ||
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+        window.matchMedia('(max-width: 767px), (pointer: coarse) and (max-device-width: 1024px)').matches;
+    }
+
     async function openApp(rawKey, accountName, readOnly) {
-      const adminMode = !readOnly && accountName?.trim().toLowerCase() === 'admin';
+      const adminMode = !readOnly && !isMobileInventory() && accountName?.trim().toLowerCase() === 'admin';
       const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
       const r = await fetch('data/app.enc?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) throw new Error('재고 자료(data/app.enc)를 찾지 못했습니다.');
