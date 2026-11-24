@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>이카운트 재고봇 설치</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { margin:0; padding:28px 14px; background:#edf2f6; color:#172439; font:15px/1.65 system-ui,sans-serif; }
+    main { max-width:660px; margin:auto; padding:26px; background:#fff; border:1px solid #d9e2ec; border-radius:16px; }
+    h1 { margin:0 0 8px; font-size:24px; }
+    h2 { margin:22px 0 4px; font-size:17px; }
+    li { margin:5px 0; }
+    a { color:#075c47; font-weight:700; }
+    code { overflow-wrap:anywhere; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>이카운트 재고봇 설치</h1>
+    <p>Chrome 또는 Edge에서 한 번 설치하면 이카운트에 로그인한 브라우저로 엑셀 13개를 받을 수 있습니다.</p>
+    <ol>
+      <li><a href="https://github.com/ddtr668-stack/Inventory-management/archive/refs/heads/main.zip">재고관리 ZIP 다운로드</a> 후 압축을 풉니다.</li>
+      <li>주소창에 Chrome은 <code>chrome://extensions</code>, Edge는 <code>edge://extensions</code>를 입력합니다.</li>
+      <li><strong>개발자 모드</strong>를 켜고 <strong>압축해제된 확장 프로그램 로드</strong>를 눌러 <code>browser-bot</code> 폴더를 선택합니다.</li>
+      <li><a href="../">재고관리 사이트</a>에 다시 접속하고 <strong>이카운트 자료 가져오기</strong>를 엽니다.</li>
+    </ol>
+    <h2>다운로드</h2>
+    <ol>
+      <li>같은 Chrome 또는 Edge에서 <a href="https://login.ecount.com/" target="_blank" rel="noopener noreferrer">이카운트</a>에 로그인하고 ERP 탭 하나를 열어둡니다.</li>
+      <li>재고관리 사이트에서 기준일자를 지정하고 <strong>이카운트 자동 다운로드</strong>를 누릅니다.</li>
+      <li>저장된 엑셀을 확인한 뒤 <strong>엑셀 파일 직접 선택</strong>으로 재고 자료를 불러옵니다.</li>
+    </ol>
+    <h2>구글 드라이브에 저장</h2>
+    <p><strong>브라우저 저장 폴더 설정</strong>에서 사용할 구글 계정의 데스크톱용 Drive 동기화 폴더를 다운로드 위치로 선택합니다. 이 브라우저에서 받는 다른 파일에도 동일한 위치가 적용됩니다.</p>
+    <p>파일마다 저장 위치 확인 창이 뜨면 브라우저 다운로드 설정에서 <strong>다운로드 전에 각 파일의 저장 위치 확인</strong>을 끄거나, 각 파일의 저장 창에서 재고봇이 제시한 이름과 경로를 유지하세요.</p>
+  </main>
+</body>
+</html>

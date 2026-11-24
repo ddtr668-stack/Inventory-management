@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "삼성이엔지 이카운트 재고봇",
+  "version": "1.0.0",
+  "description": "이카운트에 로그인한 브라우저에서 재고현황과 재고변동표를 엑셀로 받습니다.",
+  "minimum_chrome_version": "114",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApqL4gokGXvX7lJj2HtqVrdpWFPd3a5k9o2cco2D27/qT8egfvaL+uxGeLOM/th1yamFbmYIbgLylThHG/4utTou7T4nIZmR+/orwIJyaxXGkzTwo827XsFoiEjkYIeTTQXxxihskPepoaBQ6BGvPfoq3YNW88AsBpxmJP8EGsP2SeDj0Daz1LFWYmQjMxLchStpshixVJJxYYO9HRpn0pd5Kr79qkce+Z3iHSWVp11Yr755pak76vGSo9xwbFnX3gvHXrujjyo0xLZoEf+sLhc50W0+VdtIUG185AvkvKRQcZlGVmHC9+2Ld5B4cUYeUrD87H6EIMYnFVCFKxiWwAQIDAQAB",
+  "permissions": ["downloads", "scripting"],
+  "host_permissions": ["https://*.ecount.com/*"],
+  "background": { "service_worker": "worker.js" },
+  "externally_connectable": {
+    "matches": ["https://ddtr668-stack.github.io/Inventory-management/*"]
+  }
+}

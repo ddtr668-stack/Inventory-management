@@ -92,7 +92,7 @@
       <p>재고현황 1개와 재고변동표 12개를 회사 PC에서 받습니다.</p>
       <label class="sg-ec-date">기준일자<input type="date" required></label>
       <fieldset>
-        <legend>저장 위치</legend>
+          <legend>회사 PC 프로그램 저장 위치</legend>
         <div class="sg-ec-options">
           <label><input type="radio" name="sg-storage" value="drive" checked> 구글 드라이브 <small>기본</small></label>
           <label><input type="radio" name="sg-storage" value="local"> 이 PC 폴더</label>
@@ -102,10 +102,18 @@
           <a href="https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Fdrive.google.com%2Fdrive%2Fmy-drive" target="_blank" rel="noopener noreferrer">구글 드라이브 로그인 · 계정 변경</a>
           <p>저장 계정을 바꾸려면 회사 PC의 데스크톱용 Google Drive에 해당 계정을 추가하고, 그 계정의 동기화 폴더를 선택하세요.</p>
         </div>
-        <button type="button" class="sg-ec-primary" data-intent="download">이카운트 자동 다운로드</button>
+          <a href="https://login.ecount.com/" target="_blank" rel="noopener noreferrer">이카운트 로그인 열기</a>
+          <button type="button" class="sg-ec-primary" data-browser-download>이카운트 자동 다운로드</button>
+          <div class="sg-ec-browser-tools">
+            <a href="browser-bot/install.html" target="_blank" rel="noopener noreferrer">재고봇 설치 방법</a>
+            <button type="button" data-browser-settings>브라우저 저장 폴더 설정</button>
+          </div>
+          <p data-browser-status role="status">같은 브라우저의 이카운트 ERP 탭에서 다운로드합니다.</p>
         <button type="button" class="sg-ec-saved" data-intent="saved">받아 둔 자료 불러오기</button>
-        <button type="button" class="sg-ec-saved" data-intent="manual">엑셀 파일 직접 선택</button>
-        <p>회사 PC 작업 화면이 새 탭에서 열립니다. 편집 권한으로 로그인한 뒤 실행하세요.</p>
+          <button type="button" class="sg-ec-saved" data-manual>엑셀 파일 직접 선택</button>
+          <input type="file" data-browser-files multiple accept=".xlsx,.xls" hidden>
+          <button type="button" class="sg-ec-saved" data-intent="download">회사 PC 프로그램에서 다운로드</button>
+          <p>웹에서 받은 엑셀은 브라우저 다운로드 폴더에 저장됩니다. 구글 드라이브에 저장하려면 그 계정의 동기화 폴더를 브라우저 다운로드 위치로 지정하세요.</p>
       </fieldset>
     `;
     const style = document.createElement('style');
@@ -133,6 +141,10 @@
       #sg-pages-ecount [data-google] p { margin-top:4px; }
       #sg-pages-ecount .sg-ec-primary, #sg-pages-ecount .sg-ec-saved { display:block; width:100%; margin-top:7px; }
       #sg-pages-ecount .sg-ec-primary { color:#fff; background:#007957; border-color:#007957; }
+      #sg-pages-ecount .sg-ec-browser-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:7px; }
+      #sg-pages-ecount a { color:#155aa8; font-size:12px; text-decoration:underline; }
+      #sg-pages-ecount [data-browser-status] { white-space:pre-line; overflow-wrap:anywhere; color:#075a44; }
+      #sg-pages-ecount button:disabled { opacity:.6; cursor:default; }
       #sg-pages-ecount button:focus-visible, #sg-pages-ecount input:focus-visible, #sg-pages-ecount-open:focus-visible { outline:3px solid #3b9c83; outline-offset:2px; }
       #sg-pages-ecount-open { padding:6px 10px; border-radius:8px; border:1px solid #008056; background:#007957; color:white; font-size:12px; font-weight:750; cursor:pointer; }
     `;
@@ -150,6 +162,89 @@
     };
     dialog.querySelector('fieldset').addEventListener('change', renderPath);
     date.addEventListener('change', renderPath);
+    const browserStatus = dialog.querySelector('[data-browser-status]');
+    const browserDownload = dialog.querySelector('[data-browser-download]');
+    let browserPort;
+    function browserRequest(type) {
+      if (type === 'download' && !date.reportValidity()) return;
+      const runtime = globalThis.chrome?.runtime;
+      if (typeof runtime?.connect !== 'function') {
+        browserStatus.textContent = 'Chrome 또는 Edge에서 재고봇 확장 프로그램을 설치해 주세요.';
+        return;
+      }
+      browserStatus.textContent = '재고봇에 연결 중입니다.';
+      if (type === 'download') browserDownload.disabled = true;
+      try {
+        browserPort?.disconnect();
+        const port = runtime.connect('fhlhmhkelapncihoccmfcemfnehepogp', {name: 'sg-ecount-browser'});
+        browserPort = port;
+        let browserHeartbeat;
+        const connectTimer = setTimeout(() => {
+          browserStatus.textContent = '재고봇이 응답하지 않습니다. 확장 프로그램을 설치하고 사이트를 새로고침해 주세요.';
+          browserDownload.disabled = false;
+          port.disconnect();
+        }, 5_000);
+        port.onDisconnect.addListener(() => {
+          const connectionError = runtime.lastError;
+          clearInterval(browserHeartbeat);
+          clearTimeout(connectTimer);
+          if (browserPort !== port) return;
+          browserPort = undefined;
+          browserDownload.disabled = false;
+          if (connectionError) browserStatus.textContent = '재고봇이 연결되지 않았습니다. 설치 후 사이트를 새로고침해 주세요.';
+        });
+        port.onMessage.addListener(message => {
+          clearTimeout(connectTimer);
+          if (message.type === 'ready' && type === 'download-settings') {
+            browserStatus.textContent = '브라우저 설정에서 다운로드 위치를 지정하세요.';
+            clearInterval(browserHeartbeat);
+          }
+          if (message.type === 'started' || message.type === 'progress') {
+            const count = message.count ?? 0;
+            browserStatus.textContent = count + ' / ' + message.total + '개 다운로드 중' + (message.name ? '\n' + message.name : '');
+          }
+          if (message.type === 'complete') {
+            browserStatus.textContent = message.count + '개 다운로드 완료\n' + message.folder;
+            browserDownload.disabled = false;
+            clearInterval(browserHeartbeat);
+          }
+          if (message.type === 'error') {
+            browserStatus.textContent = message.message;
+            browserDownload.disabled = false;
+            clearInterval(browserHeartbeat);
+          }
+        });
+        port.postMessage({type: 'status'});
+        port.postMessage({type, date: date.value});
+        if (type === 'download') browserHeartbeat = setInterval(() => port.postMessage({type: 'status'}), 12_000);
+      } catch {
+        browserStatus.textContent = '재고봇을 설치한 후 페이지를 새로고침해 주세요.';
+        browserDownload.disabled = false;
+      }
+    }
+    browserDownload.addEventListener('click', () => browserRequest('download'));
+    dialog.querySelector('[data-browser-settings]').addEventListener('click', () => {
+      if (!browserDownload.disabled) browserRequest('download-settings');
+    });
+    const upload = dialog.querySelector('[data-browser-files]');
+    dialog.querySelector('[data-manual]').addEventListener('click', () => {
+      if (typeof window.handleEcountFile === 'function') upload.click();
+      else window.open(office + '#ecount=manual&storage=' + mode() + '&date=' + encodeURIComponent(date.value), '_blank', 'noopener,noreferrer');
+    });
+    upload.addEventListener('change', async event => {
+      if (!upload.files.length) return;
+      const originalDate = document.getElementById('ecountBaseDate');
+      if (originalDate) originalDate.value = date.value;
+      const count = upload.files.length;
+      try {
+        await window.handleEcountFile(event);
+        browserStatus.textContent = count + '개 파일을 선택했습니다. 재고 반영 결과는 화면에 표시됩니다.';
+      } catch {
+        browserStatus.textContent = '엑셀 파일을 읽지 못했습니다. 다운로드한 .xlsx 파일을 확인해 주세요.';
+      } finally {
+        upload.value = '';
+      }
+    });
     dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
     for (const button of dialog.querySelectorAll('[data-intent]')) {
       button.addEventListener('click', () => {
