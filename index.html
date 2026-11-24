@@ -1,8 +1,12 @@
+---
+layout: null
+---
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="deployment-revision" content="{{ site.github.build_revision | escape }}" />
   <meta name="robots" content="noindex, nofollow" />
   <title>(주)삼성이엔지 물류관리 · 로그인</title>
   <style>
@@ -56,6 +60,7 @@
     const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
     const toB64 = u => btoa(String.fromCharCode.apply(null, u));
     const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    const deployedRevision = document.querySelector('meta[name="deployment-revision"]').content;
     const idleLimit = 10 * 60 * 1000;
     const activityKey = 'sg_pages_activity_at';
     const sessionKeys = ['sg_pages_key', 'sg_pages_user', 'sg_pages_readonly', activityKey];
@@ -613,24 +618,33 @@
         window.matchMedia('(max-width: 767px), (pointer: coarse) and (max-device-width: 1024px)').matches;
     }
 
-    function removeReadOnlyBanner() {
+    function attachSessionControls() {
       const banners = [...document.body.querySelectorAll('div, aside, header, p, section')];
       const banner = banners.reverse().find(element => {
         const text = element.textContent.trim();
         return text.startsWith('조회 전용 페이지입니다') && text.length < 250 &&
           text.includes('이카운트에서 받기는 동작하지 않습니다') && text.includes('로그아웃');
       });
-      if (!banner) return;
-      banner.remove();
+      banner?.remove();
 
       const brand = document.querySelector('#ecSidebar .ec-sb-logo');
       if (!brand) return;
+      const controls = document.createElement('span');
+      controls.style.cssText = 'display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-inline-start:auto';
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = '로그아웃';
-      button.style.cssText = 'margin-inline-start:auto;padding:4px 8px;border:1px solid currentColor;border-radius:5px;font-size:12px';
+      button.style.cssText = 'padding:4px 8px;border:1px solid currentColor;border-radius:5px;font-size:12px';
       button.addEventListener('click', () => logout());
-      brand.append(button);
+      controls.append(button);
+      if (/^[a-f0-9]{40}$/i.test(deployedRevision)) {
+        const version = document.createElement('code');
+        version.textContent = 'v.' + deployedRevision.slice(0, 7);
+        version.title = '배포 버전 ' + deployedRevision;
+        version.style.cssText = 'font-size:11px;color:inherit';
+        controls.append(version);
+      }
+      brand.append(controls);
     }
 
     async function openApp(rawKey, accountName, readOnly) {
@@ -647,7 +661,7 @@
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
         watchSessionActivity();
-        removeReadOnlyBanner();
+        attachSessionControls();
         try {
           if (mobile) {
             const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
