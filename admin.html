@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self' https://api.github.com; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <title>직원 계정 추가 · 삼성ENG 재고관리</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 20px 16px; background: #f0f4f9; color: #14253c; font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 460px; margin: 0 auto; background: white; border: 1px solid #d4dfec; border-radius: 14px; padding: 22px; }
+    header { font-size: 14px; color: #41556e; }
+    h1 { font-size: 25px; margin: 3px 0 18px; }
+    label { display: block; margin: 14px 0; font-size: 15px; font-weight: 650; }
+    input { display: block; width: 100%; padding: 11px; border: 1px solid #9bacc3; border-radius: 7px; font: 16px system-ui, sans-serif; margin-top: 4px; }
+    button { width: 100%; min-height: 44px; padding: 10px; border: 1px solid #1557a1; background: #1557a1; color: white; border-radius: 8px; font: 650 16px system-ui, sans-serif; cursor: pointer; }
+    button:disabled { opacity: .65; }
+    a { color: #1557a1; }
+    small, p { font-size: 14px; }
+    #status:empty { display: none; }
+    #status { background: #eef5ff; padding: 10px; border-radius: 7px; }
+    #status.error { background: #fff0ef; color: #8c2222; }
+    footer { margin-top: 18px; font-size: 14px; }
+  </style>
+  <script src="admin.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>(주)삼성이엔지 · 물류관리</header>
+    <h1>직원 계정 추가</h1>
+    <form id="authenticate" method="post" autocomplete="off">
+      <label>관리자 아이디<input id="administrator" type="text" autocomplete="username" autocapitalize="none" required></label>
+      <label>관리자 비밀번호<input id="admin-password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">관리자 인증</button>
+    </form>
+    <form id="add-staff" method="post" autocomplete="off" hidden>
+      <label>직원 아이디<input id="employee" type="text" pattern="[a-zA-Z0-9._\-]{3,20}" maxlength="20" autocapitalize="none" spellcheck="false" required></label>
+      <small>영문·숫자·마침표·밑줄·하이픈 3~20자</small>
+      <label>직원 초기 비밀번호<input id="employee-password" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>직원 초기 비밀번호 확인<input id="employee-password-check" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label>GitHub 저장소 쓰기 토큰<input id="repository-token" type="password" autocomplete="off" spellcheck="false" required></label>
+      <p>Inventory-management 저장소에만 적용되는 세분화된 토큰이 필요합니다. 저장소 권한은 Contents의 읽기 및 쓰기로 지정합니다. 토큰은 등록할 때 GitHub API로만 전송됩니다.</p>
+      <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">GitHub에서 토큰 만들기</a></p>
+      <button type="submit">재고 조회 계정 추가</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <footer><a href="./">재고관리 로그인으로 돌아가기</a></footer>
+  </main>
+</body>
+</html>
