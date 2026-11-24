@@ -358,7 +358,7 @@ layout: null
         @media screen and (min-width:768px) {
           body.sg-staff.ec-layout {padding-left:0}
           body.sg-staff #ecSidebar {position:static;width:auto;padding:8px 16px}
-          body.sg-staff #ecSidebar > :not(.ec-sb-logo) {display:none!important}
+          body.sg-staff #ecSidebar > :not(.ec-sb-logo,#sg-session-controls) {display:none!important}
           body.sg-staff .ec-sb-logo {margin:0}
           body.sg-staff :is(#ecPageHead,#ecKpi,#ecOldKpi,#ecOldWhBar,[id^="navTab-"],#sg-pages-ecount-open,#btnBoardEdit,.ec-seg,[onclick="resetBoardEdits()"],[onclick="exportDashboardExcel()"],label:has(#chkIncludeNewOnBoards)) {display:none!important}
           body.sg-staff:not(.sg-mobile-inventory) #ecBoardGroup {display:none!important}
@@ -662,18 +662,26 @@ layout: null
       }
     }
 
-    function attachSessionControls() {
-      const banners = [...document.body.querySelectorAll('div, aside, header, p, section')];
-      const banner = banners.reverse().find(element => {
-        const text = element.textContent.trim();
-        return text.startsWith('조회 전용 페이지입니다') && text.length < 250 &&
-          text.includes('이카운트에서 받기는 동작하지 않습니다') && text.includes('로그아웃');
-      });
-      banner?.remove();
+    function removeReadOnlyBanner() {
+      const banners = document.body.querySelectorAll('div, aside, header, p, section, [role="status"], [role="alert"]');
+      for (const element of banners) {
+        const text = element.textContent.replace(/[\s\u200B-\u200D\uFEFF]/g, '');
+        if (text.length < 250 && text.includes('조회전용페이지입니다') &&
+            text.includes('이카운트에서받기') && text.includes('동작하지않습니다') &&
+            text.endsWith('로그아웃')) {
+          element.remove();
+          return true;
+        }
+      }
+      return false;
+    }
 
+    function attachSessionControls(mobile) {
+      if (!removeReadOnlyBanner()) window.addEventListener('load', removeReadOnlyBanner, {once: true});
       const brand = document.querySelector('#ecSidebar .ec-sb-logo');
       if (!brand) return;
       const controls = document.createElement('span');
+      controls.id = 'sg-session-controls';
       controls.style.cssText = 'display:inline-flex;align-items:center;gap:6px;white-space:nowrap;margin-inline-start:auto';
       const button = document.createElement('button');
       button.type = 'button';
@@ -690,7 +698,28 @@ layout: null
         version.style.cssText = 'font-size:11px;color:inherit';
         controls.append(version);
       }
-      brand.append(controls);
+      if (mobile) {
+        brand.after(controls);
+        brand.parentElement.classList.add('sg-mobile-header');
+        const style = document.createElement('style');
+        style.textContent = `
+          @media screen {
+            body #ecSidebar.sg-mobile-header, body #ecSidebar .sg-mobile-header {
+              display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;
+            }
+            #ecSidebar .sg-mobile-header > *, #ecSidebar.sg-mobile-header > * {grid-column:1 / -1}
+            #ecSidebar .sg-mobile-header > .ec-sb-logo, #ecSidebar.sg-mobile-header > .ec-sb-logo {
+              grid-column:1;grid-row:1;min-width:0;margin:0;
+            }
+            #ecSidebar #sg-session-controls {grid-column:2;grid-row:1;justify-self:end;color:#e2e8f0}
+            #sg-session-controls button {min-height:32px}
+          }
+          @media print {#sg-session-controls {display:none!important}}
+        `;
+        document.head.append(style);
+      } else {
+        brand.append(controls);
+      }
     }
 
     async function openApp(rawKey, accountName, readOnly) {
@@ -707,7 +736,7 @@ layout: null
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
         watchSessionActivity();
-        attachSessionControls();
+        attachSessionControls(mobile);
         try {
           if (mobile) {
             const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
