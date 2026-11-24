@@ -19,6 +19,8 @@
     input:focus { border-color: #1f5ca8; box-shadow: 0 0 0 3px rgba(31,92,168,.15); }
     .btn { width: 100%; margin-top: 8px; padding: 11px; font-size: 14px; font-weight: 700; color: #fff; background: #1f5ca8; border: 0; border-radius: 8px; cursor: pointer; }
     .btn:hover { background: #1a4f91; }
+    .btn-readonly { color: #1f5ca8; background: #fff; border: 1px solid #1f5ca8; }
+    .btn-readonly:hover { color: #1f5ca8; background: #eff6ff; }
     .btn:disabled { background: #9ca3af; cursor: default; }
     .msg { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; }
     .err { background: #fef2f2; color: #b91c1c; }
@@ -35,6 +37,7 @@
     <div class="field"><label for="id">아이디</label><input id="id" type="text" autocomplete="username" autocapitalize="off" /></div>
     <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" /></div>
     <button id="submit" type="submit" class="btn">로그인</button>
+    <button id="readOnly" type="submit" class="btn btn-readonly">재고 확인 · 읽기 전용</button>
     <div id="error" class="msg err hidden"></div>
     <div class="foot">조회 전용 페이지입니다.<br />계정은 관리자에게 받아 주세요.</div>
   </form>
@@ -51,7 +54,7 @@
     let busy = false;
 
     function setErr(t) { $('error').textContent = t || ''; $('error').classList.toggle('hidden', !t); }
-    function setBusy(on, label) { busy = on; $('submit').disabled = on; $('submit').textContent = on ? (label || '확인 중…') : '로그인'; }
+    function setBusy(on, label) { busy = on; $('submit').disabled = $('readOnly').disabled = on; $('submit').textContent = on ? (label || '확인 중…') : '로그인'; }
 
     async function getJson(url) {
       const r = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
@@ -459,7 +462,7 @@
       enhanceBoard();
     }
 
-    async function openApp(rawKey, accountName) {
+    async function openApp(rawKey, accountName, readOnly) {
       const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
       const r = await fetch('data/app.enc?t=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) throw new Error('재고 자료(data/app.enc)를 찾지 못했습니다.');
@@ -471,9 +474,24 @@
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
         try {
-          attachInventoryComparison(accountName?.trim().toLowerCase() === 'admin');
+          attachInventoryComparison(!readOnly && accountName?.trim().toLowerCase() === 'admin');
         } catch (error) {
           console.warn('재고 비교를 준비할 수 없습니다.', error);
+        }
+        if (readOnly) {
+          const style = document.createElement('style');
+          style.textContent = `
+            #ecPageHead, #ecKpi, #ecOldKpi, #ecOldWhBar, .ec-sb-it, .ec-sb-sec, .ec-sb-ft,
+            [id^="navTab-"], #btnBoardEdit, .ec-seg,
+            [onclick^="openEcountModal"], [onclick^="openUsersModal"],
+            [onclick^="resetBoardEdits"], [onclick^="toggleBoardEditMode"],
+            [onclick^="syncToGoogleDrive"], [onclick^="openDriveConfigModal"],
+            [onclick^="openAddModal"], [onclick^="quickAdjustStock"], [onclick^="exportDashboardExcel"],
+            label:has(#chkIncludeNewOnBoards) {display:none!important}
+          `;
+          document.head.append(style);
+          window.openEditModal = () => {};
+          return;
         }
         try { attachEcountPanel(); } catch (error) { console.warn('이카운트 메뉴를 열 수 없습니다.', error); }
       }, {once: true});
@@ -483,24 +501,29 @@
     async function resume() {
       let k = null; try { k = sessionStorage.getItem('sg_pages_key'); } catch (e) {}
       if (!k) return false;
-      try { setBusy(true, '여는 중…'); await openApp(b64(k), sessionStorage.getItem('sg_pages_user')); return true; }
+      try { setBusy(true, '여는 중…'); await openApp(b64(k), sessionStorage.getItem('sg_pages_user'), sessionStorage.getItem('sg_pages_readonly') === '1'); return true; }
       catch (e) { try { sessionStorage.removeItem('sg_pages_key'); } catch (x) {} setBusy(false); return false; }
     }
 
     $('form').addEventListener('submit', async e => {
       e.preventDefault();
       if (busy) return;
+      const readOnly = e.submitter?.id === 'readOnly';
       setErr('');
       const id = $('id').value.trim(), pw = $('password').value;
-      if (!id || !pw) { setErr('아이디와 비밀번호를 입력해 주세요.'); return; }
+      if (!id || !pw) {
+        setErr(readOnly ? '읽기 전용 조회에 사용할 아이디와 비밀번호를 입력해 주세요.' : '아이디와 비밀번호를 입력해 주세요.');
+        $(id ? 'password' : 'id').focus();
+        return;
+      }
       if (!window.crypto || !crypto.subtle || !window.DecompressionStream) { setErr('이 브라우저에서는 열 수 없습니다. 최신 크롬이나 엣지로 열어 주세요.'); return; }
       setBusy(true);
       try {
         const u = await unwrapKey(id, pw);
         if (!u) { setErr('아이디 또는 비밀번호가 맞지 않습니다.'); setBusy(false); $('password').select(); return; }
-        try { sessionStorage.setItem('sg_pages_key', toB64(u.raw)); sessionStorage.setItem('sg_pages_user', u.name); } catch (x) {}
+        try { sessionStorage.setItem('sg_pages_key', toB64(u.raw)); sessionStorage.setItem('sg_pages_user', u.name); sessionStorage.setItem('sg_pages_readonly', readOnly ? '1' : '0'); } catch (x) {}
         setBusy(true, '여는 중…');
-        await openApp(u.raw, u.name);
+        await openApp(u.raw, u.name, readOnly);
       } catch (err) {
         setErr(err.message || String(err)); setBusy(false);
       }
