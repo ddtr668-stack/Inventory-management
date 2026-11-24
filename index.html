@@ -79,10 +79,10 @@
       try { sessionStorage.setItem(activityKey, String(timestamp)); } catch {}
     }
 
-    function idleLogout() {
+    function logout(inactive = false) {
       try {
         sessionKeys.forEach(key => sessionStorage.removeItem(key));
-        sessionStorage.setItem('sg_pages_idle_notice', '1');
+        if (inactive) sessionStorage.setItem('sg_pages_idle_notice', '1');
       } catch {}
       location.replace(location.pathname);
     }
@@ -97,7 +97,7 @@
         const remaining = idleLimit - (Date.now() - lastAt);
         if (remaining <= 0) {
           expired = true;
-          idleLogout();
+          logout(true);
           return false;
         }
         timer = setTimeout(check, remaining);
@@ -333,11 +333,13 @@
         .sg-mobile-res {display:none}
         .sg-model-link {text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
         #sg-model-dialog {width:min(1180px,calc(100% - 24px));max-height:90vh;margin:auto;padding:16px;border:1px solid #4b709c;border-radius:12px;background:#0c1c30;color:#f5f8ff}
+        #sg-model-dialog.sg-visual-fit {box-sizing:border-box;position:fixed;inset:auto;top:var(--sg-dialog-y);left:var(--sg-dialog-x);width:var(--sg-dialog-width);max-width:none;max-height:var(--sg-dialog-height);margin:0;overflow:auto;overscroll-behavior:contain;transform:translate(-50%,-50%) scale(var(--sg-dialog-scale))}
         #sg-model-dialog::backdrop {background:#050a14b8}
         #sg-model-dialog h2 {font-size:20px;font-weight:750;margin:0 0 10px}
-        #sg-model-actions {display:flex;gap:8px;margin:0 0 10px}
+        #sg-model-actions {display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
         #sg-model-content {display:grid;grid-auto-flow:column;grid-auto-columns:clamp(420px,48%,550px);gap:12px;overflow:auto;padding-bottom:10px}
-        #sg-model-content section {border:1px solid #426187;border-radius:8px;padding:10px;min-width:0}
+        #sg-model-content:has(> section:only-child) {grid-auto-columns:100%}
+        #sg-model-content section {border:1px solid #426187;border-radius:8px;padding:10px;min-width:0;overflow:auto}
         #sg-model-content h3 {font-weight:750;margin-bottom:8px;color:#b5daff}
         #sg-model-content table {width:100%;border-collapse:collapse;font-size:12px}
         #sg-model-content :is(th,td) {border:1px solid #435671;padding:5px;text-align:center}
@@ -439,6 +441,25 @@
       document.body.append(dialog);
       const content = dialog.querySelector('#sg-model-content');
       let displayed = [];
+      const viewport = window.visualViewport;
+
+      function fitModelDialog() {
+        if (!viewport || !viewport.width || !viewport.height) return;
+        const scale = viewport.scale || 1;
+        dialog.classList.add('sg-visual-fit');
+        dialog.style.setProperty('--sg-dialog-x', viewport.offsetLeft + viewport.width / 2 + 'px');
+        dialog.style.setProperty('--sg-dialog-y', viewport.offsetTop + viewport.height / 2 + 'px');
+        dialog.style.setProperty('--sg-dialog-width', Math.min(1180, viewport.width * scale - 16) + 'px');
+        dialog.style.setProperty('--sg-dialog-height', viewport.height * scale - 16 + 'px');
+        dialog.style.setProperty('--sg-dialog-scale', String(1 / scale));
+      }
+
+      function updateOpenDialog() {
+        if (dialog.open) fitModelDialog();
+      }
+
+      viewport?.addEventListener('resize', updateOpenDialog);
+      viewport?.addEventListener('scroll', updateOpenDialog);
 
       function components(entry) {
         const current = inventoryItem(entry.code);
@@ -492,7 +513,9 @@
           return `<section><h3>${safe(entry.code)}</h3>${stock ? stockTable(parts) : specs(entry, parts)}</section>`;
         }).join('');
         content.scrollLeft = 0;
+        fitModelDialog();
         if (!dialog.open) dialog.showModal();
+        dialog.scrollTop = 0;
       }
 
       stockButton.onclick = () => show([...selected.values()], 'stock');
@@ -590,6 +613,26 @@
         window.matchMedia('(max-width: 767px), (pointer: coarse) and (max-device-width: 1024px)').matches;
     }
 
+    function removeReadOnlyBanner() {
+      const banners = [...document.body.querySelectorAll('div, aside, header, p, section')];
+      const banner = banners.reverse().find(element => {
+        const text = element.textContent.trim();
+        return text.startsWith('조회 전용 페이지입니다') && text.length < 250 &&
+          text.includes('이카운트에서 받기는 동작하지 않습니다') && text.includes('로그아웃');
+      });
+      if (!banner) return;
+      banner.remove();
+
+      const brand = document.querySelector('#ecSidebar .ec-sb-logo');
+      if (!brand) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = '로그아웃';
+      button.style.cssText = 'margin-inline-start:auto;padding:4px 8px;border:1px solid currentColor;border-radius:5px;font-size:12px';
+      button.addEventListener('click', () => logout());
+      brand.append(button);
+    }
+
     async function openApp(rawKey, accountName, readOnly) {
       const mobile = isMobileInventory();
       const adminMode = !readOnly && !mobile && accountName?.trim().toLowerCase() === 'admin';
@@ -604,6 +647,7 @@
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
         watchSessionActivity();
+        removeReadOnlyBanner();
         try {
           if (mobile) {
             const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -640,7 +684,7 @@
       if (!k) return false;
       const lastAt = lastActivityAt();
       if (lastAt && Date.now() - lastAt >= idleLimit) {
-        idleLogout();
+        logout(true);
         return true;
       }
       if (!lastAt) rememberActivity(Date.now());
