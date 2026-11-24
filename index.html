@@ -73,6 +73,115 @@
       } catch (e) { return null; }
     }
 
+    function attachEcountPanel() {
+    'use strict';
+    const office = 'http://192.168.50.159:8770/';
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const dateParts = Object.fromEntries(fmt.formatToParts(new Date()).map(({type, value}) => [type, value]));
+    const today = [dateParts.year, dateParts.month, dateParts.day].join('-');
+    const dialog = document.createElement('dialog');
+    dialog.id = 'sg-pages-ecount';
+    dialog.setAttribute('aria-labelledby', 'sg-pages-ecount-title');
+    dialog.innerHTML = `
+      <div class="sg-ec-heading">
+        <h2 id="sg-pages-ecount-title">이카운트 자료 가져오기</h2>
+        <button type="button" data-close aria-label="닫기">×</button>
+      </div>
+      <p>재고현황 1개와 재고변동표 12개를 회사 PC에서 받습니다.</p>
+      <label class="sg-ec-date">기준일자<input type="date" required></label>
+      <fieldset>
+        <legend>저장 위치</legend>
+        <div class="sg-ec-options">
+          <label><input type="radio" name="sg-storage" value="drive" checked> 구글 드라이브 <small>기본</small></label>
+          <label><input type="radio" name="sg-storage" value="local"> 이 PC 폴더</label>
+        </div>
+        <div class="sg-ec-folder"><span data-path></span><button type="button" data-intent="folder">폴더 변경</button></div>
+        <div data-google>
+          <a href="https://accounts.google.com/AccountChooser?continue=https%3A%2F%2Fdrive.google.com%2Fdrive%2Fmy-drive" target="_blank" rel="noopener noreferrer">구글 드라이브 로그인 · 계정 변경</a>
+          <p>저장 계정을 바꾸려면 회사 PC의 데스크톱용 Google Drive에 해당 계정을 추가하고, 그 계정의 동기화 폴더를 선택하세요.</p>
+        </div>
+        <button type="button" class="sg-ec-primary" data-intent="download">이카운트 자동 다운로드</button>
+        <button type="button" class="sg-ec-saved" data-intent="saved">받아 둔 자료 불러오기</button>
+        <button type="button" class="sg-ec-saved" data-intent="manual">엑셀 파일 직접 선택</button>
+        <p>회사 PC 작업 화면이 새 탭에서 열립니다. 편집 권한으로 로그인한 뒤 실행하세요.</p>
+      </fieldset>
+    `;
+    const style = document.createElement('style');
+    style.textContent = `
+      #sg-pages-ecount { width:min(520px,calc(100% - 24px)); max-height:calc(100dvh - 24px); overflow:auto; margin:auto; padding:22px; background:#fff; color:#172439; border:1px solid #d9e2ec; border-radius:15px; box-shadow:0 18px 60px #13294044; font:14px system-ui,sans-serif; }
+      #sg-pages-ecount::backdrop { background:#152137a0; }
+      #sg-pages-ecount h2 { font-size:19px; font-weight:800; margin:0; }
+      #sg-pages-ecount p { color:#52647b; font-size:12px; margin:8px 0 14px; line-height:1.5; }
+      #sg-pages-ecount .sg-ec-heading, #sg-pages-ecount .sg-ec-folder { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+      #sg-pages-ecount .sg-ec-date { display:grid; gap:5px; max-width:190px; font-weight:700; }
+      #sg-pages-ecount .sg-ec-date input, #sg-pages-ecount button { padding:7px 10px; border:1px solid #c6d9d1; border-radius:8px; background:white; color:#163b32; }
+      #sg-pages-ecount button { font-size:12px; font-weight:750; cursor:pointer; }
+      #sg-pages-ecount fieldset { margin:14px 0 0; padding:12px; border:1px solid #a7ddc6; border-radius:10px; background:#f0fbf6; }
+      #sg-pages-ecount legend { padding:0 4px; color:#075a44; font-weight:800; }
+      #sg-pages-ecount fieldset p { margin:8px 0 0; }
+      #sg-pages-ecount .sg-ec-options { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+      #sg-pages-ecount .sg-ec-options label { padding:7px; border:1px solid #cadbd4; border-radius:8px; background:#fff; font-size:12px; }
+      #sg-pages-ecount .sg-ec-options label:has(:checked) { border-color:#72ba9e; background:#e4f6ed; }
+      #sg-pages-ecount input[type=radio] { accent-color:#007957; }
+      #sg-pages-ecount .sg-ec-folder { margin-top:8px; }
+      #sg-pages-ecount .sg-ec-folder span { font-size:12px; overflow-wrap:anywhere; }
+      #sg-pages-ecount .sg-ec-folder button { flex:none; }
+      #sg-pages-ecount [data-google] { margin-top:8px; }
+      #sg-pages-ecount [data-google] a { color:#155aa8; font-size:12px; font-weight:750; text-decoration:underline; }
+      #sg-pages-ecount [data-google] p { margin-top:4px; }
+      #sg-pages-ecount .sg-ec-primary, #sg-pages-ecount .sg-ec-saved { display:block; width:100%; margin-top:7px; }
+      #sg-pages-ecount .sg-ec-primary { color:#fff; background:#007957; border-color:#007957; }
+      #sg-pages-ecount button:focus-visible, #sg-pages-ecount input:focus-visible, #sg-pages-ecount-open:focus-visible { outline:3px solid #3b9c83; outline-offset:2px; }
+      #sg-pages-ecount-open { padding:6px 10px; border-radius:8px; border:1px solid #008056; background:#007957; color:white; font-size:12px; font-weight:750; cursor:pointer; }
+    `;
+    document.head.append(style);
+    document.body.append(dialog);
+    const date = dialog.querySelector('input[type=date]');
+    date.value = today;
+    const mode = () => dialog.querySelector('input[name=sg-storage]:checked').value;
+    const renderPath = () => {
+      const drive = mode() === 'drive';
+      dialog.querySelector('[data-google]').hidden = !drive;
+      dialog.querySelector('[data-path]').textContent = drive
+        ? ['구글 드라이브', '재고관리', '이카운트_다운로드', date.value.replaceAll('-', '')].filter(Boolean).join(' / ')
+        : '회사 PC 작업 화면에서 저장 폴더 선택';
+    };
+    dialog.querySelector('fieldset').addEventListener('change', renderPath);
+    date.addEventListener('change', renderPath);
+    dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+    for (const button of dialog.querySelectorAll('[data-intent]')) {
+      button.addEventListener('click', () => {
+        if (!date.reportValidity()) return;
+        const target = new URL(office);
+        target.hash = new URLSearchParams({
+          ecount: button.dataset.intent, storage: mode(), date: date.value
+        }).toString();
+        window.open(target.href, '_blank', 'noopener,noreferrer');
+      });
+    }
+    function openDialog() {
+      if (dialog.open) return;
+      renderPath();
+      dialog.showModal();
+    }
+    window.openEcountModal = openDialog;
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.id = 'sg-pages-ecount-open';
+    openButton.textContent = '이카운트 자료 가져오기';
+    openButton.addEventListener('click', openDialog);
+    const existing = document.getElementById('btnEcountOpen');
+    if (existing && existing.parentElement.getClientRects().length) {
+      existing.hidden = true;
+      existing.after(openButton);
+    } else {
+      const header = document.querySelector('header');
+      (header || document.body).prepend(openButton);
+    }
+    }
+
     async function openApp(rawKey) {
       const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
       const r = await fetch('data/app.enc?t=' + Date.now(), { cache: 'no-store' });
@@ -82,6 +191,7 @@
       const ds = new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'));
       const html = await new Response(ds).text();
       document.open(); document.write(html); document.close();
+      try { attachEcountPanel(); } catch (error) { console.warn('이카운트 메뉴를 열 수 없습니다.', error); }
     }
 
     async function resume() {
