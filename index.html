@@ -17,6 +17,8 @@
     .field { margin-bottom: 12px; }
     input[type=text], input[type=password] { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; outline: none; background: #fff; }
     input:focus { border-color: #1f5ca8; box-shadow: 0 0 0 3px rgba(31,92,168,.15); }
+    .remember { display:flex; align-items:center; gap:8px; min-height:34px; margin:2px 0 4px; cursor:pointer; }
+    .remember input { width:18px; height:18px; margin:0; accent-color:#1f5ca8; }
     .btn { width: 100%; margin-top: 8px; padding: 11px; font-size: 14px; font-weight: 700; color: #fff; background: #1f5ca8; border: 0; border-radius: 8px; cursor: pointer; }
     .btn:hover { background: #1a4f91; }
     .btn-readonly { color: #1f5ca8; background: #fff; border: 1px solid #1f5ca8; }
@@ -36,8 +38,11 @@
     </div>
     <div class="field"><label for="id">아이디</label><input id="id" type="text" autocomplete="username" autocapitalize="off" /></div>
     <div class="field"><label for="password">비밀번호</label><input id="password" type="password" autocomplete="current-password" /></div>
+    <label class="remember"><input id="rememberCredentials" type="checkbox" /> 아이디·비밀번호 저장</label>
+    <small id="rememberHint" class="hidden">이 브라우저는 앱에서 비밀번호 저장을 요청할 수 없습니다. 브라우저의 비밀번호 관리자를 이용해 주세요.</small>
     <button id="submit" type="submit" class="btn">로그인</button>
     <button id="readOnly" type="submit" class="btn btn-readonly">재고 확인 · 읽기 전용</button>
+    <div id="loginNotice" class="msg hidden" role="status"></div>
     <div id="error" class="msg err hidden"></div>
     <div class="foot">조회 전용 페이지입니다.<br />계정은 관리자에게 받아 주세요.<br /><a href="admin.html">관리자 · 직원 계정 추가</a></div>
   </form>
@@ -45,13 +50,78 @@
   <script>
   (function () {
     // 재고 자료(data/app.enc)는 AES-GCM 으로 잠겨 있고, 아이디·비밀번호가 맞아야만 풀립니다.
-    // 비밀번호는 어디에도 저장하지 않습니다. 이 탭을 닫으면 다시 로그인해야 합니다.
+    // 요청 시 로그인 정보는 브라우저의 비밀번호 관리자에만 전달합니다.
     const $ = id => document.getElementById(id);
     const enc = new TextEncoder();
     const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
     const toB64 = u => btoa(String.fromCharCode.apply(null, u));
     const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    const idleLimit = 10 * 60 * 1000;
+    const activityKey = 'sg_pages_activity_at';
+    const sessionKeys = ['sg_pages_key', 'sg_pages_user', 'sg_pages_readonly', activityKey];
     let busy = false;
+
+    async function requestPasswordSave(id, password) {
+      if (!window.PasswordCredential || !navigator.credentials?.store) return;
+      try {
+        await navigator.credentials.store(new window.PasswordCredential({id, password}));
+      } catch {
+        // 로그인은 브라우저의 저장 여부와 관계없이 계속 진행합니다.
+      }
+    }
+
+    function lastActivityAt() {
+      try { return Number(sessionStorage.getItem(activityKey)) || 0; }
+      catch { return 0; }
+    }
+
+    function rememberActivity(timestamp) {
+      try { sessionStorage.setItem(activityKey, String(timestamp)); } catch {}
+    }
+
+    function idleLogout() {
+      try {
+        sessionKeys.forEach(key => sessionStorage.removeItem(key));
+        sessionStorage.setItem('sg_pages_idle_notice', '1');
+      } catch {}
+      location.replace(location.pathname);
+    }
+
+    function watchSessionActivity() {
+      let lastAt = lastActivityAt() || Date.now();
+      let timer;
+      let expired = false;
+      const check = () => {
+        clearTimeout(timer);
+        if (expired) return false;
+        const remaining = idleLimit - (Date.now() - lastAt);
+        if (remaining <= 0) {
+          expired = true;
+          idleLogout();
+          return false;
+        }
+        timer = setTimeout(check, remaining);
+        return true;
+      };
+      if (!check()) return;
+      const track = event => {
+        if (!event.isTrusted || expired) return;
+        const now = Date.now();
+        if (now - lastAt < 1000) return;
+        if (now - lastAt >= idleLimit) {
+          check();
+          return;
+        }
+        lastAt = now;
+        rememberActivity(lastAt);
+        check();
+      };
+      for (const type of ['pointerdown', 'pointermove', 'touchstart', 'keydown', 'scroll', 'wheel']) {
+        window.addEventListener(type, track, {capture: true, passive: true});
+      }
+      document.addEventListener('visibilitychange', check);
+      window.addEventListener('pageshow', check);
+    }
 
     function setErr(t) { $('error').textContent = t || ''; $('error').classList.toggle('hidden', !t); }
     function setBusy(on, label) { busy = on; $('submit').disabled = $('readOnly').disabled = on; $('submit').textContent = on ? (label || '확인 중…') : '로그인'; }
@@ -533,6 +603,7 @@
       document.open();
       document.write(html);
       document.addEventListener('DOMContentLoaded', () => {
+        watchSessionActivity();
         try {
           if (mobile) {
             const viewport = document.querySelector('meta[name="viewport"]') || document.createElement('meta');
@@ -567,6 +638,12 @@
     async function resume() {
       let k = null; try { k = sessionStorage.getItem('sg_pages_key'); } catch (e) {}
       if (!k) return false;
+      const lastAt = lastActivityAt();
+      if (lastAt && Date.now() - lastAt >= idleLimit) {
+        idleLogout();
+        return true;
+      }
+      if (!lastAt) rememberActivity(Date.now());
       try { setBusy(true, '여는 중…'); await openApp(b64(k), sessionStorage.getItem('sg_pages_user'), sessionStorage.getItem('sg_pages_readonly') === '1'); return true; }
       catch (e) { try { sessionStorage.removeItem('sg_pages_key'); } catch (x) {} setBusy(false); return false; }
     }
@@ -575,6 +652,7 @@
       e.preventDefault();
       if (busy) return;
       const readOnly = e.submitter?.id === 'readOnly';
+      const saveCredentials = $('rememberCredentials').checked;
       setErr('');
       const id = $('id').value.trim(), pw = $('password').value;
       if (!id || !pw) {
@@ -587,6 +665,8 @@
       try {
         const u = await unwrapKey(id, pw);
         if (!u) { setErr('아이디 또는 비밀번호가 맞지 않습니다.'); setBusy(false); $('password').select(); return; }
+        if (saveCredentials) await requestPasswordSave(u.name, pw);
+        rememberActivity(Date.now());
         try { sessionStorage.setItem('sg_pages_key', toB64(u.raw)); sessionStorage.setItem('sg_pages_user', u.name); sessionStorage.setItem('sg_pages_readonly', readOnly ? '1' : '0'); } catch (x) {}
         setBusy(true, '여는 중…');
         await openApp(u.raw, u.name, readOnly);
@@ -595,6 +675,17 @@
       }
     });
 
+    try {
+      if (sessionStorage.getItem('sg_pages_idle_notice') === '1') {
+        sessionStorage.removeItem('sg_pages_idle_notice');
+        $('loginNotice').textContent = '10분 동안 활동이 없어 자동 로그아웃되었습니다.';
+        $('loginNotice').classList.remove('hidden');
+      }
+    } catch {}
+    if (!window.PasswordCredential || !navigator.credentials?.store) {
+      $('rememberCredentials').disabled = true;
+      $('rememberHint').classList.remove('hidden');
+    }
     resume().then(ok => { if (!ok) $('id').focus(); });
   })();
   </script>
